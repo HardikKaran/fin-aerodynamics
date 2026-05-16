@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.optimize import brentq, minimize_scalar
 
 # Gas constants (air)
 gamma = 1.4 # specific heat ratio 
@@ -41,7 +42,7 @@ alpha_eff = alpha + alpha_ind
 # for force normalisation, calculate planform area of fin
 S_area = 0.5 * (c_r + c_t) * b # area of a trapezium
 mac = (2/3) * ((c_r**2 + c_r*c_t + c_t**2)/(c_r + c_t)) # mean aerodynamic chord (if trapezium became triangle)
-M1_angle = np.rad2deg(np.asin(1/M1))
+mu_1 = np.asin(1/M1)  # Mach angle in radians
 A_r = b**2/S_area
 
 Re = (rho * V * mac)/mu # Reynolds number at MAC
@@ -83,14 +84,48 @@ def M_up2M_down(gamma, M, beta, theta):
 def prandtl_meyer(gamma, M):
     term1 = np.sqrt((gamma + 1) / (gamma - 1))
     term2 = np.sqrt(M**2 - 1)
-    term3 = np.atan(term1 * term2)
+    term3 = np.atan(term2 / term1)
     nu_M = term1 * term3 - np.atan(term2)
-    return nu_M
+    return nu_M # radians
 
 def isen_pressure_ratio(gamma, M1, M2):
     coeff = (gamma - 1) / 2
     num = 1 + coeff * M1**2
-    denom = a + coeff * M2**2
+    denom = 1 + coeff * M2**2
     power = gamma / (gamma - 1)
     p_ratio = (num / denom)**power
     return p_ratio
+
+# since shock wave angle is difficult to isolate from the beta-theta relation,
+# i will use scipy library for a numerical root finding algorithm 
+# since effective AoA > LE_angle, lower front will have an oblique shock 
+# (flow turning into itself), upper front PM expansion fan (flow turning away)
+
+# lower surface
+theta1 = np.deg2rad(LE_angle + alpha_eff)
+
+# beta2theta peaks at some beta_max then falls back to 0 at pi/2,
+# so both endpoints of [mu_1, pi/2] have the same sign — bracket won't work.
+# Find the beta of maximum deflection first, then bracket the weak-shock root.
+beta_max = minimize_scalar(lambda b: -beta2theta(b, M1, gamma),
+                           bounds=(mu_1 + 1e-6, np.pi/2 - 1e-6),
+                           method='bounded').x
+beta = brentq(lambda b: beta2theta(b, M1, gamma) - theta1,
+              mu_1 + 1e-6, beta_max - 1e-6)
+
+# print(np.rad2deg(beta), np.rad2deg(beta_max))
+
+pRatio_lower = OS_pressure_ratio(gamma, M1, beta)
+M2_lower = M_up2M_down(gamma, M1, beta, theta1)
+
+# upper surface
+theta2 = np.deg2rad(alpha_eff - LE_angle)
+nu1 = prandtl_meyer(gamma, M1)
+nu_up = nu1 + theta2
+
+# print(np.rad2deg(nu1), np.rad2deg(nu_up))
+
+M2 = brentq(lambda M: prandtl_meyer(gamma, M) - nu_up, 1.001, 25.0)
+pRatio_upper = isen_pressure_ratio(gamma, M1, M2)
+
+# print(M2, pRatio_upper, pRatio_lower)
