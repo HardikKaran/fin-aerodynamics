@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.optimize import brentq, minimize_scalar
+from scipy.integrate import quad
 
 # Gas constants (air)
 gamma = 1.4 # specific heat ratio 
@@ -151,3 +152,23 @@ Cd_friction = 2 * Cf_comp # 2 because both sides of fin are wetted
 Cd_total = Cd_lift_sec + Cd_thick + Cd_friction
 
 print("C_D value: ", Cd_total)
+
+# Centripetal force calculation
+# OpenRocket technical documentation
+chord = lambda y: c_r + (c_t - c_r) * y / b   # local chord
+I1 = quad(lambda y: chord(y) * (r + y),    0, b)[0]  # first moment (forcing arm)
+I2 = quad(lambda y: chord(y) * (r + y)**2, 0, b)[0]  # second moment (damping arm)
+y_eff = I2 / I1
+p_ss = V * np.tan(np.deg2rad(cant_angle)) / y_eff
+
+F_centripetal = m_f * p_ss**2 * y_eff # F = m * w^2 * r
+
+print("Centripetal force (N): ", F_centripetal)
+
+# Temperature at LE
+T_stagnation = T_atm * (1 + 0.5*(gamma-1) * M1**2) # isentropic relation
+# Pr = 0.71
+# r_factor = Pr**(1/3) # BL doesn't recover all KE as heat, some conducted away (Polhausen 1921 - laminar, Schlichting for turbulent BL)
+# T_recovery = T_atm * (1 + r_factor * 0.5*(gamma-1) * M1**2)
+
+print("Stagnation temperature at the LE of the fin (K): ", T_stagnation)
