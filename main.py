@@ -41,7 +41,7 @@ alpha_eff = alpha + alpha_ind
 
 # for force normalisation, calculate planform area of fin
 S_area = 0.5 * (c_r + c_t) * b # area of a trapezium
-mac = (2/3) * ((c_r**2 + c_r*c_t + c_t**2)/(c_r + c_t)) # mean aerodynamic chord (if trapezium became triangle)
+mac = (2/3) * ((c_r**2 + c_r*c_t + c_t**2)/(c_r + c_t)) # mean aerodynamic chord (if trapezium became rectangle)
 mu_1 = np.asin(1/M1)  # Mach angle in radians
 A_r = b**2/S_area
 
@@ -129,3 +129,25 @@ M2 = brentq(lambda M: prandtl_meyer(gamma, M) - nu_up, 1.001, 25.0)
 pRatio_upper = isen_pressure_ratio(gamma, M1, M2)
 
 # print(M2, pRatio_upper, pRatio_lower)
+
+Cp_lower = (2 / (gamma * M1**2)) * (pRatio_lower - 1)
+Cp_upper = (2 / (gamma * M1**2)) * (pRatio_upper - 1)
+
+Cl_sec = (Cp_lower - Cp_upper) * np.cos(np.deg2rad(alpha_eff)) # assuming infinite span, closer to value at the root
+Cd_lift_sec = (Cp_lower - Cp_upper) * np.sin(np.deg2rad(alpha_eff)) # lift induced wave drag 2D
+Cl_3D = dCL_da * np.deg2rad(alpha_eff) # finite-span C_L, closer to value at tip
+
+print("C_L (close to root vavlue): ", Cl_sec, "C_L (close to tip value): ", Cl_3D)
+
+tau = t / mac
+Cd_thick = 4 * tau**2 / np.sqrt(M1**2 - 1) # thin aerofoil wave drag for fin thickness
+
+Cf_emp = 0.0592 / Re**0.2 # Prandtl-Schlichting 1/7 power law for flat plate for turbulent, incompressible BL
+Cf_comp = Cf_emp * (1 + 0.144 * M1**2)**(-0.65) # correction factor for compressiblity from Frankl-Voishel empirical correction
+# (Gudmundsson, S. General Aviation Aircraft Design: Applied Methods and Procedures, Butterworth-Heinemann, 2014 (1st ed.) / 2022 (2nd ed.) — Chapter 15, "Aircraft Drag Analysis.")
+
+Cd_friction = 2 * Cf_comp # 2 because both sides of fin are wetted
+
+Cd_total = Cd_lift_sec + Cd_thick + Cd_friction
+
+print("C_D value: ", Cd_total)
